@@ -14,22 +14,29 @@ const specType = z.object({
   bla: z.string(),
 });
 
-const contract = CustomResourceContract.createForOrg('cotera')
+const contract = CustomResourceContract.createForOrg('test')
   .kind('foo')
   .version('v1', {
     spec: specType,
     metadata: z.object({}),
   })
+  .kind('foo')
+  .version('v2', {
+    spec: z.object({
+      foo: z.string(),
+    }),
+    metadata: z.object({}),
+  })
   .build();
 
 @Injectable()
-@KubernetesResourceWatcher(contract, 'foo')
+@KubernetesResourceWatcher(contract, 'foo', 'v1')
 export class TestWatcher {
-  async added(crd: CustomResource<typeof contract.foo>) {}
+  async added(crd: CustomResource<typeof contract.foo.v1>) {}
 
-  async modified(crd: CustomResource<typeof contract.foo>) {}
+  async modified(crd: CustomResource<typeof contract.foo.v1>) {}
 
-  async deleted(crd: CustomResource<typeof contract.foo>) {}
+  async deleted(crd: CustomResource<typeof contract.foo.v1>) {}
 }
 
 describe(KubernetesOperatorModule.name, () => {
@@ -58,7 +65,7 @@ describe(KubernetesOperatorModule.name, () => {
 
     it('should register resource watchers', () => {
       expect(mocks.addWatcher).toHaveBeenCalledWith(
-        contract.foo,
+        contract.foo.v1,
         expect.any(TestWatcher),
       );
     });

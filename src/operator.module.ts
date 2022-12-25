@@ -48,7 +48,7 @@ export class KubernetesOperatorModule
     }
 
     const providers = await this.discover.providersWithMetaAtKey<
-      WatcherMeta<any, any>
+      WatcherMeta<any, any, any>
     >(KUBERNETES_RESOURCE);
 
     providers.forEach((provider) => {

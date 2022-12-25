@@ -45,18 +45,9 @@ export class AppModule implements NestModule {
 }
 ```
 
-2. Register your resource watcher
+2. Create your crd schema contract
 
 ```typescript
-import * as z from 'zod';
-import { Injectable } from '@nestjs/common';
-import {
-  CustomResourceContract,
-  KubernetesOperator,
-  CustomResource,
-  KubernetesResourceWatcher,
-} from 'nestjs-k8s-operator';
-
 const contract = CustomResourceContract.createForOrg('exampleOrg')
   .kind('yourResource')
   .version('v1', {
@@ -69,6 +60,19 @@ const contract = CustomResourceContract.createForOrg('exampleOrg')
     }),
   })
   .build();
+```
+
+3. Register your resource watcher
+
+```typescript
+import * as z from 'zod';
+import { Injectable } from '@nestjs/common';
+import {
+  CustomResourceContract,
+  KubernetesOperator,
+  CustomResource,
+  KubernetesResourceWatcher,
+} from 'nestjs-k8s-operator';
 
 @Injectable()
 @KubernetesResourceWatcher(contract, 'foo')
@@ -81,4 +85,4 @@ export class ExampleWatcher {
 }
 ```
 
-3. Profit
+4. Profit

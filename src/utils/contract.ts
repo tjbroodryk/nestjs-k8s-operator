@@ -1,11 +1,36 @@
 import * as z from 'zod';
 import { StringLiteral } from './type-magic';
+import { Spread } from 'type-fest';
 
-class TypeBuilder<R, T extends Record<string, R> = {}> {
-  protected constructor(protected readonly jsonObject: T) {}
+const baseSpec = z.object({});
 
-  static create<K>(): TypeBuilder<K> {
-    return new TypeBuilder({});
+const baseMeta = z.object({});
+
+type BaseContract = {
+  spec: typeof baseSpec;
+  metadata: typeof baseMeta;
+};
+
+export type BaseResource = {
+  org: string;
+  kind: string;
+  version: string;
+} & BaseContract;
+
+export type Registry<R extends BaseResource = BaseResource> = Record<
+  string,
+  Record<string, R>
+>;
+
+export class CustomResourceContract<T extends Registry = {}> {
+  constructor(private readonly org: string, private readonly jsonObject: T) {}
+
+  static createForOrg(org: string): CustomResourceContract<{}> {
+    return new CustomResourceContract(org, {});
+  }
+
+  kind<K extends string>(kind: StringLiteral<K>): VersionBuilder<K, T> {
+    return new VersionBuilder(this.org, kind, this.jsonObject);
   }
 
   build(): T {
@@ -13,43 +38,9 @@ class TypeBuilder<R, T extends Record<string, R> = {}> {
   }
 }
 
-const baseSpec = z.object({});
-
-const baseMeta = z.object({});
-
-export type BaseResource = {
-  org: string;
-  version: string;
-  kind: string;
-  spec: typeof baseSpec;
-  metadata: typeof baseMeta;
-};
-
-export class CustomResourceContract<
-  Resource extends BaseResource,
-  T extends Record<string, Resource> = {},
-> extends TypeBuilder<Resource, T> {
-  constructor(private readonly org: string, jsonObject: T) {
-    super(jsonObject);
-  }
-
-  static createForOrg<Resource extends BaseResource>(
-    org: string,
-  ): CustomResourceContract<Resource, {}> {
-    return new CustomResourceContract(org, {});
-  }
-
-  kind<K extends string>(
-    kind: StringLiteral<K>,
-  ): VersionBuilder<Resource, K, T> {
-    return new VersionBuilder(this.org, kind, this.jsonObject);
-  }
-}
-
 class VersionBuilder<
-  Resource extends BaseResource,
   Kind extends string,
-  T extends Record<string, Resource> = {},
+  T extends Record<Kind, Record<string, unknown>>,
 > {
   constructor(
     private readonly org: string,
@@ -57,18 +48,26 @@ class VersionBuilder<
     private readonly jsonObject: T,
   ) {}
 
-  version<V extends Resource>(
-    version: string,
-    value: Pick<V, 'spec' | 'metadata'>,
-  ): CustomResourceContract<V, T & { [k in Kind]: V }> {
+  version<Version extends string, V extends BaseContract>(
+    version: StringLiteral<Version>,
+    value: V,
+  ): CustomResourceContract<
+    T & { [k in Kind]: { [v in Version]: V & BaseResource } }
+  > {
     const nextPart = {
       [this.kind]: {
-        kind: this.kind,
-        org: this.org,
-        version,
-        ...value,
+        ...this.jsonObject[this.kind],
+        [version]: {
+          kind: this.kind,
+          org: this.org,
+          version,
+          ...value,
+        } as unknown as V,
       },
-    } as unknown as Record<Kind, V>;
+    } as unknown as Record<
+      Kind,
+      Record<Version & keyof Kind, V & BaseResource>
+    >;
     return new CustomResourceContract(this.org, {
       ...this.jsonObject,
       ...nextPart,
