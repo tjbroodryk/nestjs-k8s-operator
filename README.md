@@ -16,6 +16,8 @@
 
 Typesafe, contract-driven kubernetes operator module for a NestJS application.
 
+Use [https://github.com/colinhacks/zod](zod) object defintions to create typesafe resource watchers, with automatic validation of crds.
+
 ### Installation
 
 ```bash
@@ -56,8 +58,8 @@ import {
 } from 'nestjs-k8s-operator';
 
 const contract = CustomResourceContract.createForOrg('exampleOrg')
-  .kind('yourResource', {
-    version: 'v1',
+  .kind('yourResource')
+  .version('v1', {
     spec: z.object({
       test: z.string(),
       bla: z.string(),
