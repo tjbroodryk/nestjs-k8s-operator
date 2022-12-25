@@ -14,6 +14,8 @@
   </a>
 </div>
 
+Typesafe, contract-driven kubernetes operator module for a NestJS application.
+
 ### Installation
 
 ```bash
@@ -27,13 +29,12 @@ npm i nestjs-k8s-operator
 ```typescript
 @Module({
   imports: [
-    GithubModule.create({
-      config: (config: Env) => {
+    KubernetesOperatorModule.forRootAsync(KubernetesOperatorModule, {
+      useFactory: () => {
         return {
-          token: config.token,
+          enabled: true,
         };
       },
-      inject: [ENV_TOKEN],
     }),
   ],
 })
@@ -42,23 +43,39 @@ export class AppModule implements NestModule {
 }
 ```
 
-2. Inject HttpClientService into your constructor
+2. Register your resource watcher
 
 ```typescript
+import * as z from 'zod';
+import { Injectable } from '@nestjs/common';
 import {
-  GithubWebhook,
-  EventType,
-  GithubWebhookEvent,
-  GithubWebhookHandler,
-} from '@stockopedia/nestjs-k8s-operator';
+  CustomResourceContract,
+  KubernetesOperator,
+  CustomResource,
+  KubernetesResourceWatcher,
+} from 'nestjs-k8s-operator';
 
-@GithubWebhook(EventType.PullRequestOpened)
-export class PullRequestHook {
-  constructor(/*some dependencies*/) {}
+const contract = CustomResourceContract.createForOrg('exampleOrg')
+  .kind('yourResource', {
+    version: 'v1',
+    spec: z.object({
+      test: z.string(),
+      bla: z.string(),
+    }),
+    metadata: z.object({
+      name: z.string(),
+    }),
+  })
+  .build();
 
-  handle(event: GithubWebhookEvent<'pull_request.opened'>): Promise<void> {
-    throw new Error('Method not implemented.');
-  }
+@Injectable()
+@KubernetesResourceWatcher(contract, 'foo')
+export class ExampleWatcher {
+  async added(crd: CustomResource<typeof contract.foo>) {}
+
+  async modified(crd: CustomResource<typeof contract.foo>) {}
+
+  async deleted(crd: CustomResource<typeof contract.foo>) {}
 }
 ```
 
