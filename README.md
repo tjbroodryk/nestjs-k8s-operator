@@ -16,7 +16,7 @@
 
 Typesafe, contract-driven kubernetes operator module for a NestJS application.
 
-Use [https://github.com/colinhacks/zod](zod) object defintions to create typesafe resource watchers, with automatic validation of crds.
+Uses [zod](https://github.com/colinhacks/zod) object defintions to create typesafe resource watchers, with automatic validation of crds.
 
 ### Installation
 
