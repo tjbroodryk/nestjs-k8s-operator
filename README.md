@@ -6,7 +6,7 @@
   </a>
 </div>
 
-<h3 align="center">NestJS Github Webhooks Module</h3>
+<h3 align="center">NestJS K8s Operator Module</h3>
 
 <div align="center">
   <a href="https://nestjs.com" target="_blank">
@@ -17,7 +17,7 @@
 ### Installation
 
 ```bash
-npm i @stockopedia/nestjs-k8s-operator
+npm i nestjs-k8s-operator
 ```
 
 ## Example

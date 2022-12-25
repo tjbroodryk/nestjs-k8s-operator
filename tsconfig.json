@@ -12,6 +12,7 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "baseUrl": "./",
+    "strictNullChecks": true,
     "noLib": false
   },
   "include": ["src/**/*.ts"],

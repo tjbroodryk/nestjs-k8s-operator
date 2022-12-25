@@ -2,23 +2,44 @@ import { SetMetadata } from '@nestjs/common';
 import { SCOPE_OPTIONS_METADATA } from '@nestjs/common/constants';
 import { KUBERNETES_RESOURCE } from '../constants';
 import { Constructor } from 'type-fest';
+import { BaseResource } from '../utils/contract';
+import { z } from 'zod';
 
-export type ResourceIdentifier = {
-  org: string;
-
-  kind: string;
-
-  version: string;
+export type CustomResource<T extends BaseResource> = {
+  spec: z.output<T['spec']>;
+  metadata: z.output<T['metadata']>;
 };
 
-type Watcher = {
+export type Watcher<T extends BaseResource> = {
   //todo contract up
-  onChange: () => {};
+  added(resource: CustomResource<T>): Promise<void>;
+  modified(resource: CustomResource<T>): Promise<void>;
+
+  deleted(resource: CustomResource<T>): Promise<void>;
 };
 
-export function KubernetesResourceWatcher(resource: ResourceIdentifier) {
-  return (target: Constructor<Watcher>) => {
-    SetMetadata(SCOPE_OPTIONS_METADATA, resource)(target);
-    SetMetadata(KUBERNETES_RESOURCE, resource)(target);
+type Registry = Record<string, BaseResource>;
+
+export type WatcherMeta<
+  R extends Registry,
+  ResourceKey extends keyof R & string,
+> = {
+  contract: Registry[ResourceKey];
+  name: ResourceKey;
+};
+
+export function KubernetesResourceWatcher<
+  R extends Registry,
+  ResourceKey extends keyof R & string,
+>(contract: R, resource: ResourceKey) {
+  return (target: Constructor<Watcher<Registry[ResourceKey]>>) => {
+    SetMetadata(SCOPE_OPTIONS_METADATA, {
+      contract: contract[resource],
+      name: resource,
+    })(target);
+    SetMetadata(KUBERNETES_RESOURCE, {
+      contract: contract[resource],
+      name: resource,
+    })(target);
   };
 }

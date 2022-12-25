@@ -1,10 +1,19 @@
-import Operator, { ResourceEventType } from '@dot-i/k8s-operator';
+import { ResourceEvent, ResourceEventType } from '@dot-i/k8s-operator';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Config } from '../config';
 import { KubernetesOperator } from './operator';
+import * as z from 'zod';
 
 const startMock = jest.fn();
 const stopMock = jest.fn();
+
+interface MockOperator {
+  runCallbacks(
+    e: Pick<ResourceEvent, 'object' | 'type'> & {
+      object: { spec: Record<string, unknown> };
+    },
+  ): Promise<void>;
+}
 
 jest.mock('@dot-i/k8s-operator', () => ({
   ResourceEventType: {
@@ -12,8 +21,8 @@ jest.mock('@dot-i/k8s-operator', () => ({
     Modified: 'MODIFIED',
     Deleted: 'DELETED',
   },
-  default: class {
-    callbacks = [];
+  default: class implements MockOperator {
+    callbacks: any[] = [];
 
     watchResource(_: string, _1: string, _2: string, callback: Function) {
       this.callbacks.push(callback);
@@ -26,6 +35,16 @@ jest.mock('@dot-i/k8s-operator', () => ({
       startMock();
     }
 
+    async runCallbacks(
+      e: Pick<ResourceEvent, 'object' | 'type'> & {
+        object: { spec: Record<string, unknown> };
+      },
+    ) {
+      for (const callback of this.callbacks) {
+        await callback(e);
+      }
+    }
+
     stop() {
       stopMock();
     }
@@ -34,133 +53,198 @@ jest.mock('@dot-i/k8s-operator', () => ({
 
 describe('operator', () => {
   describe('the start method', () => {
-    describe('when enabled', () => {
-      let operator: KubernetesOperator;
-      const watcherMock = {
-        added: jest.fn(),
-        modified: jest.fn(),
-        deleted: jest.fn(),
-      };
+    let operator: KubernetesOperator & MockOperator;
+    const watcherMock = {
+      added: jest.fn(),
+      modified: jest.fn(),
+      deleted: jest.fn(),
+    };
 
-      beforeAll(async () => {
-        startMock.mockClear();
+    beforeAll(async () => {
+      startMock.mockClear();
 
-        operator = await createService({
-          enabled: true,
-        });
-        operator.addWatcher({} as any, watcherMock as any);
-
-        await operator.start();
+      operator = await createService({
+        enabled: true,
       });
+      operator.addWatcher(
+        {
+          kind: 'foo',
+          org: 'test',
+          version: 'v1',
+          metadata: z.object({
+            name: z.string(),
+          }),
+          spec: z.object({
+            foo: z.string(),
+          }),
+        },
+        watcherMock as any,
+      );
 
-      it('should start the operator', () => {
-        expect(startMock).toHaveBeenCalled();
-      });
+      await operator.start();
+    });
 
-      describe('given added event', () => {
-        beforeAll(() => {
-          (operator as any).callbacks.forEach((fn) => {
-            fn({
-              type: ResourceEventType.Added,
-              object: {
+    it('should start the operator', () => {
+      expect(startMock).toHaveBeenCalled();
+    });
+
+    describe('given added event', () => {
+      describe('given valid resource', () => {
+        beforeAll(async () => {
+          await operator.runCallbacks({
+            type: ResourceEventType.Added,
+            object: {
+              spec: {
                 foo: 'bar',
               },
-            });
+              metadata: {
+                name: 'test',
+              },
+            },
           });
         });
 
         it('should run each registered watcher', () => {
           expect(watcherMock.added).toHaveBeenCalledWith({
-            foo: 'bar',
+            spec: {
+              foo: 'bar',
+            },
+            metadata: {
+              name: 'test',
+            },
           });
         });
       });
 
-      describe('given modified event', () => {
-        beforeAll(() => {
-          (operator as any).callbacks.forEach((fn) => {
-            fn({
-              type: ResourceEventType.Modified,
-              object: {
+      describe('given invalid resource', () => {
+        it('should throw', () => {
+          expect(
+            async () =>
+              await operator.runCallbacks({
+                type: ResourceEventType.Added,
+                object: {
+                  spec: {},
+                  metadata: {
+                    name: 'test',
+                  },
+                },
+              }),
+          ).rejects.toThrow();
+        });
+      });
+    });
+
+    describe('given modified event', () => {
+      describe('given valid resource', () => {
+        beforeAll(async () => {
+          await operator.runCallbacks({
+            type: ResourceEventType.Modified,
+            object: {
+              spec: {
                 foo: 'bar',
               },
-            });
+              metadata: {
+                name: 'test',
+              },
+            },
           });
         });
 
         it('should run each registered watcher', () => {
           expect(watcherMock.modified).toHaveBeenCalledWith({
-            foo: 'bar',
+            spec: {
+              foo: 'bar',
+            },
+            metadata: {
+              name: 'test',
+            },
           });
         });
       });
 
-      describe('given deleted event', () => {
-        beforeAll(() => {
-          (operator as any).callbacks.forEach((fn) => {
-            fn({
-              type: ResourceEventType.Deleted,
-              object: {
+      describe('given invalid resource', () => {
+        it('should throw', () => {
+          expect(
+            async () =>
+              await operator.runCallbacks({
+                type: ResourceEventType.Modified,
+                object: {
+                  spec: {
+                    foo: 'bla',
+                  },
+                  metadata: {},
+                },
+              }),
+          ).rejects.toThrow();
+        });
+      });
+    });
+
+    describe('given deleted event', () => {
+      describe('given valid resource', () => {
+        beforeAll(async () => {
+          await operator.runCallbacks({
+            type: ResourceEventType.Deleted,
+            object: {
+              spec: {
                 foo: 'bar',
               },
-            });
+              metadata: {
+                name: 'test',
+              },
+            },
           });
         });
 
         it('should run each registered watcher', () => {
           expect(watcherMock.deleted).toHaveBeenCalledWith({
-            foo: 'bar',
+            spec: {
+              foo: 'bar',
+            },
+            metadata: {
+              name: 'test',
+            },
           });
         });
       });
-    });
-    describe('when not enabled', () => {
-      beforeAll(async () => {
-        startMock.mockClear();
-        const operator = await createService({
-          enabled: false,
-        });
-        await operator.start();
-      });
 
-      it('should not start the operator', () => {
-        expect(startMock).not.toHaveBeenCalled();
+      describe('given invalid resource', () => {
+        it('should throw', () => {
+          expect(
+            async () =>
+              await operator.runCallbacks({
+                type: ResourceEventType.Deleted,
+                object: {
+                  spec: {
+                    foo: 'bla',
+                  },
+                  metadata: {},
+                },
+              }),
+          ).rejects.toThrow();
+        });
       });
     });
   });
 
   describe('the stop method', () => {
-    describe('when enabled', () => {
-      beforeAll(async () => {
-        stopMock.mockClear();
-        const operator = await createService({
-          enabled: true,
-        });
-        operator.stop();
+    beforeAll(async () => {
+      stopMock.mockClear();
+      const operator = await createService({
+        enabled: true,
       });
-
-      it('should stop the operator', () => {
-        expect(stopMock).toHaveBeenCalled();
-      });
+      operator.stop();
     });
 
-    describe('when not enabled', () => {
-      beforeAll(async () => {
-        stopMock.mockClear();
-        const operator = await createService({
-          enabled: false,
-        });
-        operator.stop();
-      });
-
-      it('should do nothing', () => {
-        expect(stopMock).not.toHaveBeenCalled();
-      });
+    it('should stop the operator', () => {
+      expect(stopMock).toHaveBeenCalled();
     });
   });
 });
 
-async function createService(configMock): Promise<KubernetesOperator> {
+async function createService(
+  configMock,
+): Promise<KubernetesOperator & MockOperator> {
   const module: TestingModule = await Test.createTestingModule({
     providers: [
       KubernetesOperator,
@@ -171,5 +255,5 @@ async function createService(configMock): Promise<KubernetesOperator> {
     ],
   }).compile();
 
-  return module.get<KubernetesOperator>(KubernetesOperator);
+  return module.get<KubernetesOperator & MockOperator>(KubernetesOperator);
 }

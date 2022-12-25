@@ -1,19 +1,13 @@
 import Operator, { ResourceEventType } from '@dot-i/k8s-operator';
+import { KubernetesObject } from '@kubernetes/client-node';
 import { Injectable, Logger } from '@nestjs/common';
 import { Config } from '../config';
-import { KubernetesResourceWatcher } from '../resource-watcher.interface';
-
-interface WatcherConfig {
-  org: string;
-
-  kind: string;
-
-  version: string;
-}
+import { BaseResource } from 'src/utils/contract';
+import { Watcher as Handler } from '../decorators/resource';
 
 interface Watcher {
-  config: WatcherConfig;
-  handler: KubernetesResourceWatcher<unknown>;
+  config: BaseResource;
+  handler: Handler<any>;
 }
 
 class K8sLogger extends Logger {
@@ -29,16 +23,13 @@ class K8sLogger extends Logger {
 export class KubernetesOperator extends Operator {
   private readonly _logger = new Logger(KubernetesOperator.name);
 
-  constructor(private readonly config: Config) {
+  constructor() {
     super(new K8sLogger());
   }
 
   private readonly watchers: Watcher[] = [];
 
-  public addWatcher(
-    config: WatcherConfig,
-    handler: KubernetesResourceWatcher<unknown>,
-  ): void {
+  public addWatcher(config: BaseResource, handler: Handler<any>): void {
     this.watchers.push({
       config,
       handler,
@@ -46,19 +37,10 @@ export class KubernetesOperator extends Operator {
   }
 
   public async start(): Promise<void> {
-    if (!this.config.enabled) {
-      this._logger.debug(`Kubernetes operator not enabled - not starting`);
-      return;
-    }
-
     return super.start();
   }
 
   public stop(): void {
-    if (!this.config.enabled) {
-      return;
-    }
-
     return super.stop();
   }
 
@@ -70,25 +52,33 @@ export class KubernetesOperator extends Operator {
           watcher.config.version,
           watcher.config.kind,
           async (e) => {
-            const object = e.object;
+            const object = e.object as KubernetesObject & {
+              spec: Record<string, any>;
+            };
+
+            const resource = {
+              spec: watcher.config.spec.parse(object.spec),
+              metadata: watcher.config.metadata.parse(object.metadata),
+            };
+
             switch (e.type) {
               case ResourceEventType.Added:
                 this._logger.debug(
                   `Resource added: ${object.apiVersion}.${object.kind}`,
                 );
-                watcher.handler.added(object);
+                await watcher.handler.added(resource);
                 break;
               case ResourceEventType.Modified:
                 this._logger.debug(
                   `Resource modified: ${object.apiVersion}.${object.kind}`,
                 );
-                watcher.handler.modified(object);
+                await watcher.handler.modified(resource);
                 break;
               case ResourceEventType.Deleted:
                 this._logger.debug(
                   `Resource deleted: ${object.apiVersion}.${object.kind}`,
                 );
-                watcher.handler.deleted(object);
+                await watcher.handler.deleted(resource);
                 break;
             }
           },
