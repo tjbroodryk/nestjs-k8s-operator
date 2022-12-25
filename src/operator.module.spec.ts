@@ -15,8 +15,8 @@ const specType = z.object({
 });
 
 const contract = CustomResourceContract.createForOrg('cotera')
-  .kind('foo', {
-    version: 'v1',
+  .kind('foo')
+  .version('v1', {
     spec: specType,
     metadata: z.object({}),
   })

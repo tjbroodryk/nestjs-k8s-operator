@@ -39,7 +39,7 @@ export class CustomResourceContract<
   Resource extends BaseResource,
   T extends Record<string, Resource> = {},
 > extends TypeBuilder<Resource, T> {
-  protected constructor(private readonly org: string, jsonObject: T) {
+  constructor(private readonly org: string, jsonObject: T) {
     super(jsonObject);
   }
 
@@ -49,17 +49,36 @@ export class CustomResourceContract<
     return new CustomResourceContract(org, {});
   }
 
-  kind<K extends string, V extends Resource>(
+  kind<K extends string>(
     kind: StringLiteral<K>,
-    value: Pick<V, 'spec' | 'version' | 'metadata'>,
-  ): CustomResourceContract<V, T & { [k in K]: V }> {
+  ): VersionBuilder<Resource, K, T> {
+    return new VersionBuilder(this.org, kind, this.jsonObject);
+  }
+}
+
+class VersionBuilder<
+  Resource extends BaseResource,
+  Kind extends string,
+  T extends Record<string, Resource> = {},
+> {
+  constructor(
+    private readonly org: string,
+    private readonly kind: Kind,
+    private readonly jsonObject: T,
+  ) {}
+
+  version<V extends Resource>(
+    version: string,
+    value: Pick<V, 'spec' | 'metadata'>,
+  ): CustomResourceContract<V, T & { [k in Kind]: V }> {
     const nextPart = {
-      [kind]: {
-        kind,
+      [this.kind]: {
+        kind: this.kind,
         org: this.org,
+        version,
         ...value,
       },
-    } as unknown as Record<K, V>;
+    } as unknown as Record<Kind, V>;
     return new CustomResourceContract(this.org, {
       ...this.jsonObject,
       ...nextPart,
