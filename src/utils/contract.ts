@@ -11,16 +11,6 @@ class TypeBuilder<R, T extends Record<string, R> = {}> {
   build(): T {
     return this.jsonObject;
   }
-
-  add<K extends string, V extends R>(
-    key: StringLiteral<K>,
-    value: V,
-  ): TypeBuilder<R, T & { [k in K]: V }> {
-    const nextPart = {
-      [key]: value,
-    };
-    return new TypeBuilder({ ...this.jsonObject, ...nextPart });
-  }
 }
 
 const baseSpec = z.object({});
